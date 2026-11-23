@@ -1,0 +1,52 @@
+name: NEREA ZIP Bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'NEREA-ready-GitHub.zip'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  extract-and-start-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract NEREA ZIP into repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f NEREA-ready-GitHub.zip
+          tmp="$(mktemp -d)"
+          unzip -q -o NEREA-ready-GitHub.zip -d "$tmp"
+          cp -a "$tmp"/. .
+          rm -rf "$tmp" NEREA-ready-GitHub.zip
+          rm -f .github/workflows/nerea-bootstrap.yml
+
+      - name: Commit the extracted project
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+          else
+            git commit -m "Bootstrap NEREA project from ZIP"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
+
+      - name: Start the real Windows build workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh workflow run build-windows.yml --ref "${GITHUB_REF_NAME}"
